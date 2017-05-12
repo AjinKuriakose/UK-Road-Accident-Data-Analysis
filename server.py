@@ -80,17 +80,17 @@ def brushDate():
 
 @app.route("/parallel")
 def parallel():
-	return render_template("parallel.html")
+    return render_template("parallel.html")
 
 @app.route("/wordCloud")
 def wordCloud():
-	return render_template("wordCloud.html")
+    return render_template("wordCloud.html")
 
 @app.route("/sunburst")
 def sunburst():
-	return render_template("sunburst.html")
+    return render_template("sunburst.html")
 
-	
+    
 def get_geo_vals():
 
     #Check if data is cached
@@ -286,27 +286,27 @@ def get_scree_data():
 @app.route("/get_data")
 def get_data():
 
-	row_list = []
-	with open(files.nums_file, 'rt') as f:
-		reader = csv.reader(f)
-		firstRow = next(reader)
+    row_list = []
+    with open(files.nums_file, 'rt') as f:
+        reader = csv.reader(f)
+        firstRow = next(reader)
 
 
-		print(firstRow)
+        print(firstRow)
 
 
-		for row in reader:
-			row_list.append(row[:-1])
+        for row in reader:
+            row_list.append(row[:-1])
 
 
         # Perform random sampling
-	random_samples = random_sample(row_list, constants.parallel_fraction*len(row_list))
-	dict = {}
-	dict["random"] = random_samples
-	dict["labels"] = firstRow
-	print(random_samples[0])
-	print("sending data.....")
-	return app.response_class(json.dumps(dict), content_type='application/json')
+    random_samples = random_sample(row_list, constants.parallel_fraction*len(row_list))
+    dict = {}
+    dict["random"] = random_samples
+    dict["labels"] = firstRow
+    print(random_samples[0])
+    print("sending data.....")
+    return app.response_class(json.dumps(dict), content_type='application/json')
 
 @app.route("/euclidean_data")
 def get_euclidean_data():
@@ -349,25 +349,28 @@ def get_euclidean_data():
 @app.route("/correlation_data")
 def get_correlation_data():
     # Code from the previous section: Data preparation
-
     dict = {}
-    
+    mc = memcache.Client(['127.0.0.1:11211'], debug=0)
     # random_pca_values,stratified_pca_values = get_pca_values()
-    random_pca_values,stratified_pca_values = get_samples()
-    
-    random_corr_values = SK_Metrics.pairwise_distances(random_pca_values, metric = 'correlation')
-    stratified_corr_values = SK_Metrics.pairwise_distances(stratified_pca_values, metric = 'correlation')
 
-    mds = MDS(n_components=2, dissimilarity='precomputed')
-    
-    random_corr_values = mds.fit_transform(random_corr_values)
-    random_corr_values = np.array(random_corr_values,np.float32)
-    random_corr_values = random_corr_values.tolist()
+    if mc.get('random_correlation') is not None:
+        random_corr_values = mc.get('random_correlation')
+        stratified_corr_values = mc.get('stratified_correlation')
+    else:    
+        random_pca_values,stratified_pca_values = get_samples()
+        random_corr_values = SK_Metrics.pairwise_distances(random_pca_values, metric = 'correlation')
+        stratified_corr_values = SK_Metrics.pairwise_distances(stratified_pca_values, metric = 'correlation')
+        mds = MDS(n_components=2, dissimilarity='precomputed')
+        random_corr_values = mds.fit_transform(random_corr_values)
+        random_corr_values = np.array(random_corr_values,np.float32)
+        random_corr_values = random_corr_values.tolist()
 
+        stratified_corr_values = mds.fit_transform(stratified_corr_values)
+        stratified_corr_values = np.array(stratified_corr_values,np.float32)
+        stratified_corr_values = stratified_corr_values.tolist()
 
-    stratified_corr_values = mds.fit_transform(stratified_corr_values)
-    stratified_corr_values = np.array(stratified_corr_values,np.float32)
-    stratified_corr_values = stratified_corr_values.tolist()
+        mc.set("random_correlation",random_corr_values)
+        mc.set("stratified_correlation",stratified_corr_values)
     
     dict['random_corr_vals'] = random_corr_values
     dict['stratified_corr_vals'] = stratified_corr_values
